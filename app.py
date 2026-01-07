@@ -2,7 +2,7 @@
 FastAPI主应用
 提供知识库管理的REST API
 """
-from fastapi import FastAPI, UploadFile, File, HTTPException, Form
+from fastapi import FastAPI, UploadFile, File, HTTPException, Form, Depends, Header
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from typing import List, Optional
@@ -42,6 +42,47 @@ app.add_middleware(
 
 # 初始化知识库管理器
 kb_manager = KnowledgeBaseManager(persist_directory="./data")
+
+# ============= API密钥鉴权 =============
+
+# API Key配置（从环境变量读取）
+API_KEY = os.getenv("API_KEY", "").strip()
+
+def verify_api_key(x_api_key: Optional[str] = Header(None, alias="X-API-Key")):
+    """
+    验证API密钥
+    
+    Args:
+        x_api_key: 请求头中的API密钥
+        
+    Raises:
+        HTTPException: 如果API密钥无效
+    """
+    # 如果未配置API_KEY环境变量，跳过验证（开发模式）
+    if not API_KEY:
+        logger.debug("API_KEY未配置，跳过API密钥验证（仅用于开发环境）")
+        return
+    
+    # 如果配置了API_KEY，必须验证
+    if not x_api_key:
+        logger.warning("请求缺少API密钥")
+        raise HTTPException(
+            status_code=401,
+            detail="缺少API密钥。请在请求头中添加: X-API-Key"
+        )
+    
+    if x_api_key != API_KEY:
+        logger.warning(f"API密钥验证失败")
+        raise HTTPException(
+            status_code=403,
+            detail="无效的API密钥"
+        )
+    
+    logger.debug("API密钥验证成功")
+
+
+# 鉴权依赖（用于需要保护的端点）
+require_api_key = Depends(verify_api_key)
 
 
 # ============= 请求模型 =============
@@ -97,7 +138,7 @@ async def get_split_strategies():
 
 
 @app.post("/kb/create")
-async def create_knowledge_base(request: CreateKBRequest):
+async def create_knowledge_base(request: CreateKBRequest, _: bool = require_api_key):
     """
     创建知识库
     
@@ -152,7 +193,8 @@ async def upload_file(
     file: UploadFile = File(...),
     split_strategy: str = 'fixed',
     chunk_size: int = 400,
-    chunk_overlap: int = 50
+    chunk_overlap: int = 50,
+    _: bool = require_api_key
 ):
     """
     上传文件到知识库
@@ -245,7 +287,7 @@ async def upload_file(
 
 
 @app.post("/kb/{name}/query")
-async def query_knowledge_base(name: str, request: QueryRequest):
+async def query_knowledge_base(name: str, request: QueryRequest, _: bool = require_api_key):
     """
     查询知识库
     
@@ -290,7 +332,7 @@ async def query_knowledge_base(name: str, request: QueryRequest):
 
 
 @app.get("/kb/list")
-async def list_knowledge_bases():
+async def list_knowledge_bases(_: bool = require_api_key):
     """
     获取所有知识库列表
     
@@ -317,7 +359,8 @@ async def get_knowledge_base_docs(
     name: str, 
     limit: Optional[int] = None,
     include_preview: bool = True,
-    max_preview_chunks: int = 5
+    max_preview_chunks: int = 5,
+    _: bool = require_api_key
 ):
     """
     获取知识库中的文档列表
@@ -359,7 +402,7 @@ async def get_knowledge_base_docs(
 
 
 @app.delete("/kb/{name}")
-async def delete_knowledge_base(name: str):
+async def delete_knowledge_base(name: str, _: bool = require_api_key):
     """
     删除知识库
     
@@ -394,7 +437,7 @@ async def delete_knowledge_base(name: str):
 
 
 @app.delete("/kb/{name}/docs")
-async def delete_documents(name: str, request: DeleteDocsRequest):
+async def delete_documents(name: str, request: DeleteDocsRequest, _: bool = require_api_key):
     """
     删除知识库中的文档
     

@@ -33,7 +33,7 @@ class Embedder:
         """从环境变量加载embedder"""
         try:
             # 从环境变量读取API key
-            api_key = os.getenv("DASHSCOPE_API_KEY","sk-9c911e9558404bd4b83ebb61302fc8e3")
+            api_key = os.getenv("DASHSCOPE_API_KEY","")
             if not api_key:
                 raise RuntimeError(
                     "未设置DASHSCOPE_API_KEY环境变量。"
